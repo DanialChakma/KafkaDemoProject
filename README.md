@@ -94,3 +94,18 @@ If any step fails (e.g., payment), Saga orchestrator automatically:
 → payment.refund
 → inventory.release
 → order.cancelled ❌
+
+
+🧱 Why This Project Matters
+
+This project showcases your ability to:
+
+Design event-driven microservice architectures.
+
+Implement Kafka-based communication and orchestration.
+
+Handle distributed transactions without 2PC.
+
+Maintain data consistency and reliability using Saga + Outbox patterns.
+
+Demonstrate fault-tolerant design and eventual consistency principles in practice.
