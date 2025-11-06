@@ -1,0 +1,50 @@
+server:
+  port: 8086
+spring:
+  application:
+    name: saga-orchestrator
+  kafka:
+    bootstrap-servers: host.docker.internal:9092
+    admin:
+      auto-create: true   # enables KafkaAdmin
+    consumer:
+      group-id: saga-orchestrator
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.oms.events,com.oms.saga.events,*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+  datasource:
+    url: jdbc:mysql://host.docker.internal:3306/saga_db?allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
+    username: danial
+    password: nopass
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+# topics mapping
+topics:
+  inventory-reserve-request: inventory.reserve.request
+  inventory-reserved: inventory.reserved
+  inventory-reservation-failed: inventory.reservation.failed
+  payments-request: payments.request
+  payments-success: payments.success
+  payments-failed: payments.failed
+  inventory-release: inventory.release
+  inventory-released: inventory.released
+  payments-refund: payments.refund # refund request event
+  payments-refunded: payments.refunded # refund confirmation event
+  customer-validation-result: customer.validation.result
+  product-validation-result: product.validation.result
+  order-cancelled: orders.cancelled
+  order-status-updated: orders.status.updated
+
+order:
+  service:
+    url: http://order-service/api/orders
+

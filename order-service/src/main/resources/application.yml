@@ -1,0 +1,47 @@
+server:
+  port: 8086
+spring:
+  application:
+    name: order-service
+  profiles:
+    active: dev
+#  datasource:
+#    url: jdbc:mysql://localhost:3306/authdb?createDatabaseIfNotExist=true&allowPublicKeyRetrieval=true&useSSL=false&serverTimezone=UTC
+#    username: danial
+#    password: nopass
+#    driver-class-name: com.mysql.cj.jdbc.Driver
+#  sql:
+#    init:
+#      mode: always            # ✅ Force schema.sql to run
+#      continue-on-error: true # ✅ Optional, won't fail on minor SQL errors
+#      schema-locations: classpath:schema-mysql.sql # ✅ Explicit location
+#      data-locations: classpath:data.sql
+#  jpa:
+#    generate-ddl: false
+#    hibernate:
+#      ddl-auto: none
+#      naming:
+#        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+#    properties:
+#      hibernate:
+#        show_sql: true
+#        format_sql: true
+#    database-platform: org.hibernate.dialect.MySQL8Dialect
+#  security:
+#    oauth2:
+#      resourceserver:
+#        jwt:
+#          public-key-location: classpath:public-key.pem
+##          jwk-set-uri: http://localhost:9003/oauth/token_key
+#      resource:
+#        jwt:
+#          key-store: classpath:jwt-keystore.p12
+#          key-store-password: Da123!@#
+#          key-alias: jwt-key
+#          key-store-type: PKCS12
+#server:
+#  port: 9003
+#eureka:
+#  client:
+#    service-url:
+#      defaultZone: http://localhost:8761/eureka

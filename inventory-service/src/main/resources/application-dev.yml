@@ -1,0 +1,50 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: inventory-service
+  cloud:
+    discovery:
+      enabled: true
+  datasource:
+    url: jdbc:mysql://host.docker.internal:3306/inventory_db?allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
+    username: danial
+    password: nopass
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+  kafka:
+    bootstrap-servers: host.docker.internal:9092
+    consumer:
+      group-id: inventory-service
+      auto-offset-reset: earliest
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+
+# topics mapping
+topics:
+  order-created: orders.created
+  inventory-reserve-request: inventory.reserve.request
+  inventory-reserved: inventory.reserved
+  inventory-reservation-failed: inventory.reservation.failed
+  payments-success: payments.success
+  payments-failed: payments.failed
+  inventory-release: inventory.release
+  inventory-released: inventory.released
+
+
+

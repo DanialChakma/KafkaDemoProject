@@ -1,0 +1,35 @@
+#version: '3.9'
+
+services:
+  # ---------------------------
+  # Spring Boot Application
+  # ---------------------------
+  app:
+    build: .
+    container_name: customer-service
+    ports:
+      - "8085:8085"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/customer_db?allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: danial
+      SPRING_DATASOURCE_PASSWORD: nopass
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.MySQL8Dialect
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # Optional: profiles or other settings
+      SPRING_PROFILES_ACTIVE: dev
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-service:8761/eureka/
+    networks:
+#      - app_network
+      - shared-net
+
+# ---------------------------
+# Docker Volumes & Network
+# ---------------------------
+volumes:
+  mysql_data:
+
+networks:
+#  app_network:
+#    external: true
+  shared-net:
+    external: true

@@ -1,0 +1,64 @@
+server:
+  port: 8082
+spring:
+  application:
+    name: payment-service
+  kafka:
+    bootstrap-servers: host.docker.internal:9092
+    consumer:
+      group-id: payment-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    listener:
+      ack-mode: record
+      concurrency: 3
+  datasource:
+    url: jdbc:mysql://host.docker.internal:3306/payment_db?allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
+    username: danial
+    password: nopass
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  jpa:
+    show-sql: false
+    generate-ddl: true
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        show_sql: false
+        format_sql: true
+    database-platform: org.hibernate.dialect.MySQL8Dialect
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+
+topics:
+  orders-created: orders.created
+  payments-request: payments.request # payment request
+  payments-success: payments.success # payment success confirmed
+  payments-failed: payments.failed   # payment failed
+  payments-refund: payments.refund   # payment refund request, compensatory action
+  payments-refunded: payments.refunded # payment refund confirmation, refunded
+
+resilience4j:
+  retry:
+    instances:
+      kafkaPublisher:
+        max-attempts: 5
+        wait-duration: 2s
+        retry-exceptions:
+          - org.apache.kafka.common.errors.TimeoutException
+          - org.springframework.kafka.KafkaException
+        ignore-exceptions:
+          - java.lang.IllegalArgumentException

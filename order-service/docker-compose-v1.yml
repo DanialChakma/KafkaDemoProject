@@ -1,0 +1,38 @@
+#version: '3.8'
+#services:
+#  mysql-db:
+#    image: mysql:8.0
+#    container_name: mysql-db
+#    restart: always
+#    environment:
+#      MYSQL_ROOT_PASSWORD: root
+#      MYSQL_DATABASE: omsdb
+#      MYSQL_USER: omsuser
+#      MYSQL_PASSWORD: omspass
+#    ports:
+#      - "3306:3306"
+#    volumes:
+#      - db_data:/var/lib/mysql
+#    networks:
+#      - oms-network
+#
+#  order-service:
+#    build: .
+#    container_name: order-service
+#    restart: always
+#    depends_on:
+#      - mysql-db
+#    environment:
+#      SPRING_DATASOURCE_URL: jdbc:mysql://mysql-db:3306/omsdb?allowPublicKeyRetrieval=true&useSSL=false
+#      SPRING_DATASOURCE_USERNAME: omsuser
+#      SPRING_DATASOURCE_PASSWORD: omspass
+#    ports:
+#      - "8080:8080"
+#    networks:
+#      - oms-network
+#
+#networks:
+#  oms-network:
+#
+#volumes:
+#  db_data:

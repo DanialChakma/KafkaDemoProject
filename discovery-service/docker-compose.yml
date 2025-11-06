@@ -1,0 +1,98 @@
+#version: '3.9'
+
+services:
+  # ---------------------------
+  # MySQL Database
+  # ---------------------------
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+#      MYSQL_DATABASE: customer_db
+      MYSQL_USER: danial
+      MYSQL_PASSWORD: nopass
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./mysql-init:/docker-entrypoint-initdb.d # <-- host folder mounted
+      - D:/docker-data/mysql_data:/var/lib/mysql
+    networks:
+      - app_network
+      - shared-net
+
+  # ---------------------------
+  # Zookeeper (required by Kafka)
+  # ---------------------------
+  zookeeper:
+    image: wurstmeister/zookeeper
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - app_network
+
+  # ---------------------------
+  # Kafka Broker
+  # ---------------------------
+  kafka:
+    image: wurstmeister/kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_LISTENERS: INSIDE://0.0.0.0:29092,OUTSIDE://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:29092,OUTSIDE://host.docker.internal:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - app_network
+      - shared-net
+  # -----------------
+  # Kafka UI for Monitoring
+  # -----------------
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - "9093:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    networks:
+      - app_network
+      - shared-net
+  # ---------------------------
+  # Spring Boot Application
+  # ---------------------------
+  app:
+    build: .
+    container_name: discovery-service
+    ports:
+      - "8761:8761"
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+    networks:
+      - app_network
+      - shared-net
+
+# ---------------------------
+# Docker Volumes & Network
+# ---------------------------
+volumes:
+  mysql_data:
+
+networks:
+  app_network:
+    driver: bridge
+  shared-net:
+    name: shared-net  # auto-created if missing
