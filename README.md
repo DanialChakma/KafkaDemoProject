@@ -8,6 +8,7 @@ It simulates a distributed Order Management System where each service (Order, In
 Instead of relying on direct REST calls or shared databases, services communicate asynchronously via Kafka topics, making the architecture fault-tolerant, scalable, and resilient to partial failures.
 
 🧠 Key Architectural Concepts
+
 🧵 1. Saga Orchestration Pattern
 
 Coordinates the overall transaction flow (e.g., order creation → inventory reservation → payment → order completion).
@@ -15,6 +16,7 @@ Coordinates the overall transaction flow (e.g., order creation → inventory res
 Ensures event-driven state transitions and compensating actions in case of failures.
 
 Maintains a Saga log for event idempotency and recovery.
+
 
 ⚙️ 2. Event-Driven Communication via Kafka
 
@@ -32,6 +34,7 @@ order.completed / order.cancelled
 
 This pattern eliminates tight coupling between services — they don’t call each other directly.
 
+
 🧾 3. Outbox Pattern for Reliability
 
 Each service stores outgoing events in an outbox table before publishing to Kafka.
@@ -39,6 +42,7 @@ Each service stores outgoing events in an outbox table before publishing to Kafk
 A background scheduler (or Kafka retry job) ensures event delivery even if Kafka is temporarily unavailable.
 
 Prevents data loss and guarantees at-least-once delivery.
+
 
 🛡️ 4. Asynchronous Validation Pattern
 
@@ -49,6 +53,7 @@ Customer existence (via Customer Service)
 Product availability (via Inventory Service)
 
 Kafka topics like customer.validate.request and inventory.validate.request decouple this process — Order Service continues without blocking network calls.
+
 
 🔁 5. Compensation & Failure Handling
 
