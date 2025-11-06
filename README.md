@@ -67,6 +67,21 @@ Update order status to CANCELLED
 
 This ensures eventual consistency across services.
 
+🔐 Data Consistency Strategy
+
+Each service manages its own database and communicates only through Kafka events.
+Saga orchestration ensures that distributed workflows behave like atomic transactions:
+
+Reserve inventory →
+
+Process payment →
+
+Confirm order OR
+
+Trigger compensating rollback on failure.
+
+No service directly calls another, ensuring loose coupling and independent deployability.
+
 
 🧮 High-Level Flow Example
 
