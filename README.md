@@ -67,25 +67,34 @@ Update order status to CANCELLED
 
 This ensures eventual consistency across services.
 
+
 🧮 High-Level Flow Example
+
+
 Customer places Order
         │
         ▼
+        
 Order Service → publishes → order.created
         │
         ▼
+        
 Saga Orchestrator → sends → inventory.reserve.request
         │
         ▼
+        
 Inventory Service → reserves → emits inventory.reserved
         │
         ▼
+        
 Saga Orchestrator → triggers → payment.process
         │
         ▼
+        
 Payment Service → confirms → emits payment.succeeded
         │
         ▼
+        
 Saga Orchestrator → publishes → order.completed ✅
 
 
