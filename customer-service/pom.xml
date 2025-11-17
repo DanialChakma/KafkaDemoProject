@@ -6,7 +6,7 @@
 
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.cms</groupId>
+    <groupId>com.oms</groupId>
 <!--  Customer Management System -->
     <artifactId>customer-service</artifactId>
     <version>1.0.0</version>
@@ -17,6 +17,8 @@
         <java.version>17</java.version>
         <spring.boot.version>3.3.4</spring.boot.version>
         <spring.cloud.version>2023.0.3</spring.cloud.version>
+        <spring-boot.aot.enabled>true</spring-boot.aot.enabled>
+        <spring-boot.appcds.enabled>true</spring-boot.appcds.enabled>
     </properties>
 
     <parent>
@@ -27,10 +29,24 @@
     </parent>
 
     <dependencies>
+
         <!-- Spring Boot Web -->
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.boot</groupId>-->
+<!--            <artifactId>spring-boot-starter-web</artifactId>-->
+<!--&lt;!&ndash;           exclude tomcat native server from starter web &ndash;&gt;-->
+<!--                <exclusions>-->
+<!--                    <exclusion>-->
+<!--                        <groupId>org.springframework.boot</groupId>-->
+<!--                        <artifactId>spring-boot-starter-tomcat</artifactId>-->
+<!--                    </exclusion>-->
+<!--                </exclusions>-->
+<!--        </dependency>-->
+
+        <!-- Reactive Web Server (Netty) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
         <!-- Kafka -->
@@ -66,10 +82,10 @@
         </dependency>
 
         <!-- Eureka Client -->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.cloud</groupId>-->
+<!--            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>-->
+<!--        </dependency>-->
 
         <!-- Actuator -->
         <dependency>
@@ -124,4 +140,29 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <version>${spring.boot.version}</version>
+                        <configuration>
+                            <mainClass>com.oms.customer.CustomerServiceApplication</mainClass>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>process-aot</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

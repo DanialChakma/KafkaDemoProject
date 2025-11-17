@@ -1,42 +1,165 @@
 server:
+  http2:
+    enabled: false
   port: 8085
 spring:
   application:
     name: customer-service
   datasource:
-    url: jdbc:mysql://localhost:3306/customer_db?allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
-    username: danial
-    password: nopass
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/customer_db?allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME:danial}
+    password: ${SPRING_DATASOURCE_PASSWORD:nopass}
     driver-class-name: com.mysql.cj.jdbc.Driver
-
+    hikari:
+      maximum-pool-size: 5          # ↓ default 10
+      minimum-idle: 2
+      pool-name: HikariPool
+      max-lifetime: 1800000
+      idle-timeout: 300000
+      connection-timeout: 30000
   jpa:
+    open-in-view: false
     database-platform: org.hibernate.dialect.MySQL8Dialect
     hibernate:
       ddl-auto: update
     show-sql: false
+    properties:
+      # ---------------------------
+      # 1. DISABLE HEAVY CACHES
+      # ---------------------------
+      hibernate.cache.use_second_level_cache: false
+      hibernate.cache.use_query_cache: false
+      hibernate.cache.region.factory_class: org.hibernate.cache.internal.NoCachingRegionFactory
+
+      # ---------------------------
+      # 2. DISABLE BYTECODE ENHANCEMENT
+      # (removes dirty tracking, lazy proxies)
+      # ---------------------------
+      hibernate.enhancer.enableLazyInitialization: false
+      hibernate.enhancer.enableDirtyTracking: false
+      hibernate.enhancer.enableAssociationManagement: false
+
+      # ---------------------------
+      # 3. REDUCE METADATA & REFLECTION
+      # ---------------------------
+      hibernate.bytecode.use_reflection_optimizer: false
+#      hibernate.metadata_builder_contributor:
+
+      # ---------------------------
+      # 4. DISABLE UNNECESSARY RUNTIME FEATURES
+      # ---------------------------
+      hibernate.generate_statistics: false
+      hibernate.jdbc.batch_size: 10
+      hibernate.jdbc.fetch_size: 20
+      hibernate.temp.use_jdbc_metadata_defaults: false
+
+      # ---------------------------
+      # 5. FLUSH MODE (avoid dirty checking work)
+      # ---------------------------
+      javax.persistence.flushMode: COMMIT
+
+      # ---------------------------
+      # 6. HBM2DDL — NO AUTO SCHEMA
+      # ---------------------------
+      hibernate.hbm2ddl.auto: update #none
+
+  # Limit Netty threads (1-2 threads for ultra-lightweight)
+  netty:
+    eventLoopThreads: 1            # Minimal event loop threads
+    maxConnections: 2              # Limit concurrent connections
+    ioWorkerCount: 1
+    ioSelectCount: 1               # Optional, reduces selector threads
+
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    listener:
+      concurrency: 1
+      idle-between-polls: 3000   #2.5s pause 2.5s between each poll
+      ack-mode: record  #batch, manual_immediate
     producer:
+#      key-serializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+#      value-serializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
       # enable idempotence for producer safety (optional)
       properties:
         enable.idempotence: true
+        buffer.memory: 16777216          # 16 MB instead of 100 MB
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
     consumer:
       group-id: customer-service
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      enable-auto-commit: false
+      max-poll-records: 1
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
-        spring.json.trusted.packages: "com.oms.customer.events,com.oms.customer.dto,java.util"
-    listener:
-      concurrency: 3
+#        spring.json.trusted.packages: "com.oms.customer.events,com.oms.customer.dto,java.util,*"
+        fetch.min.bytes: 1
+        fetch.max.bytes: 262144              # 256 KB
+        max.partition.fetch.bytes: 262144
+        receive.buffer.bytes: 32768          # 32 KB
+        send.buffer.bytes: 32768             # 32 KB
+        max.poll.interval.ms: 30000   # 30s
+        heartbeat.interval.ms: 5000   # 5s
+        session.timeout.ms: 15000     # 15s
+        spring.json.trusted.packages: "*"
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+  # Reduce number of Spring task threads
+  task:
+    execution:
+      pool:
+        core-size: 1
+        max-size: 2
+        queue-capacity: 50
+    scheduling:
+      pool:
+        size: 1
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.oauth2.OAuth2AutoConfiguration
+      - org.springframework.boot.autoconfigure.web.servlet.MultipartAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.websocket.servlet.WebSocketServletAutoConfiguration
+      - org.springframework.boot.autoconfigure.jmx.JmxAutoConfiguration
+      - org.springframework.boot.autoconfigure.web.servlet.error.ErrorMvcAutoConfiguration
 
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-    register-with-eureka: true
-    fetch-registry: true
+#eureka:
+#  client:
+#    service-url:
+#      defaultZone: http://localhost:8761/eureka/
+#    register-with-eureka: true
+#    fetch-registry: true
+
 topics:
   order-validation-request: order.validation.request
   customer-validation-result: customer.validation.result
+
+
+# Reduce Netty worker threads (default: CPU * 2)
+# Reduce Netty buffer allocator (optional)
+reactor:
+  netty:
+    ioWorkerCount: 1
+    ioSelectCount: 1
+    maxConnections: 2
+    pendingAcquireMaxCount: 100
+    leakDetection: disabled
+    pool:
+      maxIdleTime: 30s
+      acquireTimeout: 10s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: []
+  metrics:
+    enable:
+      all: false
+
+logging:
+  level:
+    reactor.netty: OFF

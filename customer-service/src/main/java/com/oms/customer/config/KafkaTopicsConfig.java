@@ -35,7 +35,7 @@ public class KafkaTopicsConfig {
         topics.values().forEach(topicName -> {
             newTopics.add(
                     TopicBuilder.name(topicName)
-                            .partitions(3)
+                            .partitions(1)
                             .replicas(1)
                             .build()
             );
