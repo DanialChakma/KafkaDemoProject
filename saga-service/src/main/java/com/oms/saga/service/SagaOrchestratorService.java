@@ -11,6 +11,7 @@ import com.oms.saga.repository.SagaMessageLogRepository;
 import com.oms.saga.repository.SagaRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
@@ -23,11 +24,15 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class SagaOrchestratorService {
-
+    @Autowired
     private final OutboxRepository outboxRepository;
+    @Autowired
     private final SagaRepository sagaRepository;
+    @Autowired
     private final SagaMessageLogRepository logRepository;
+    @Autowired
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    @Autowired
     private final ObjectMapper mapper;
 
 
@@ -97,9 +102,10 @@ public class SagaOrchestratorService {
 
             Saga saga = getOrCreateSaga(event.getOrderId());
 
+            log.info("Before duplicate check in startInventoryReservation");
             if (isDuplicate(saga, event.getEventId())) return;
-
-            saga.setInventoryReserved(true);
+            log.info("After duplicate check in startInventoryReservation");
+            saga.setInventoryReserved(false);
             saga.setLastUpdated(Instant.now());
             saga.markProcessed(event.getEventId());
             sagaRepository.save(saga);
@@ -383,9 +389,9 @@ public class SagaOrchestratorService {
                     "RECEIVED", null);
 
             Saga saga = getOrCreateSaga(event.getOrderId());
-
+            log.info("Before Checking Duplicate in handlePaymentSuccess");
             if (isDuplicate(saga, event.getEventId())) return;
-
+            log.info("After Checking Duplicate in handlePaymentSuccess");
             saga.setPaymentSucceeded(true);
             saga.setLastUpdated(Instant.now());
             saga.markProcessed(event.getEventId());
@@ -525,10 +531,10 @@ public class SagaOrchestratorService {
                     .status("CONFIRMED")
                     .timestamp(Instant.now())
                     .build();
-
+            log.info("Before Publishing order.status.updated CONFIRMED for order {}", orderId);
             this.publishEvent(event, ORDER_UPDATED_TOPIC, orderId, "saga-service");
 
-            log.info("✅ Published order.status.updated CONFIRMED for order {}", orderId);
+            log.info("Published order.status.updated CONFIRMED for order {}", orderId);
 
             logSagaEvent(event.getEventId(), orderId,
                     "OrderStatusUpdatedEvent", event, "saga-service", "PROCESSED", null);
@@ -617,9 +623,11 @@ public class SagaOrchestratorService {
                     .payload(payload)
                     .createdAt(Instant.now())
                     .build();
-            outboxRepository.save(outbox);
+            outboxRepository.saveAndFlush(outbox);
 
             // 2️⃣ Attempt to send immediately
+            // since kafka send method is async, outbox relay schedular may pick first before sending via following.
+            // to avoid race condition, set flag as send then handle below accordingly.
             kafkaTemplate.send(eventType, aggregateId, payload)
                     .whenComplete((result, ex) -> {
                         if (ex == null) {
@@ -627,12 +635,25 @@ public class SagaOrchestratorService {
                             markOutboxAsSent(outbox.getId());
                         } else {
                             log.error("Kafka send failed for {} [{}]: {}", eventType, aggregateId, ex.getMessage());
+                            markOutboxAsFailed(outbox.getId());
                         }
                     });
 
         } catch (Exception e) {
             log.error("Error publishing event to Kafka/outbox: {}", e.getMessage());
         }
+    }
+
+    @Transactional
+    protected void markOutboxAsFailed(Long outboxId) {
+        outboxRepository.findById(outboxId).ifPresent(e -> {
+            e.setRetryCount(e.getRetryCount() + 1);
+            e.setLastAttemptAt(Instant.now());
+            // exponential backoff: e.g., 2^retryCount seconds
+            long delaySeconds = (long) Math.pow(2, e.getRetryCount());
+            e.setNextAttemptAt(Instant.now().plusSeconds(delaySeconds));
+            outboxRepository.save(e);
+        });
     }
 
     @Transactional
@@ -643,6 +664,5 @@ public class SagaOrchestratorService {
             outboxRepository.save(o);
         });
     }
-
 
 }

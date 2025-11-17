@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: discovery-server
+  main:
+    banner-mode: off
+  jmx:
+    enabled: false
+  devtools:
+    add-properties: false
 
 eureka:
   client:
@@ -12,3 +18,8 @@ eureka:
   server:
     enable-self-preservation: true
     eviction-interval-timer-in-ms: 60000
+
+
+management:
+  endpoints:
+    enabled-by-default: false

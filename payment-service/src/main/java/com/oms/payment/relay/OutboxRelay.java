@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.List;
@@ -24,16 +25,18 @@ public class OutboxRelay {
     private final ObjectMapper mapper;
 
     @Scheduled(fixedDelay = 5000)
-//    @Retry(name = "kafkaPublisher", fallbackMethod = "fallbackPublish")
+    @Transactional
     public void publishPendingEvents() throws JsonProcessingException {
-        List<OutboxEvent> pendingEvents = outboxRepository.findByPublishedFalse();
+
+        Instant now = Instant.now();
+        List<OutboxEvent> pendingEvents = outboxRepository.findByPublishedFalseAndNextAttemptAtBefore(now);
 
         if (pendingEvents.isEmpty()) {
             log.debug("No pending outbox events to publish.");
             return;
         }
 
-        log.info("🚀 Found {} pending outbox events to publish", pendingEvents.size());
+        log.info("Found {} pending outbox events to publish", pendingEvents.size());
 
         for (OutboxEvent event : pendingEvents) {
             try {
@@ -42,15 +45,14 @@ public class OutboxRelay {
                         .send(
                                 event.getEventType(),
                                 event.getAggregateId(),
-                                mapper.readTree(event.getPayload())
+                                event.getPayload()
                         )
                         .whenComplete((result, ex) -> {
                             if (ex == null) {
-                                event.setPublished(true);
-                                event.setUpdatedAt(Instant.now());
-                                outboxRepository.save(event);
+                                markOutboxAsSent(event.getId());
                                 log.info("Resent outbox event {} -> {}", event.getEventType(), event.getAggregateId());
                             } else {
+                                markOutboxAsFailed(event.getId());
                                 log.warn("Failed resend of {}: {}", event.getEventType(), ex.getMessage());
                             }
                         });
@@ -63,6 +65,26 @@ public class OutboxRelay {
         }
     }
 
+    @Transactional
+    protected void markOutboxAsFailed(Long outboxId) {
+        outboxRepository.findById(outboxId).ifPresent(e -> {
+            e.setRetryCount(e.getRetryCount() + 1);
+            e.setLastAttemptAt(Instant.now());
+            // exponential backoff: e.g., 2^retryCount seconds
+            long delaySeconds = (long) Math.pow(2, e.getRetryCount());
+            e.setNextAttemptAt(Instant.now().plusSeconds(delaySeconds));
+            outboxRepository.save(e);
+        });
+    }
+
+    @Transactional
+    protected void markOutboxAsSent(Long outboxId) {
+        outboxRepository.findById(outboxId).ifPresent(o -> {
+            o.setPublished(true);
+            o.setUpdatedAt(Instant.now());
+            outboxRepository.save(o);
+        });
+    }
 
     /**
      * Fallback method for when retry attempts are exhausted

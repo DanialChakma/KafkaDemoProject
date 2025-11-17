@@ -1,5 +1,6 @@
 package com.oms.entity;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -19,6 +20,7 @@ public class OrderItem {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "order_id", nullable = false, columnDefinition = "varchar(36)")
+    @JsonBackReference  // ✅ prevents Jackson from serializing the back reference
     private Order order;
 
     // 🔹 External reference to Product microservice

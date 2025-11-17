@@ -1,0 +1,46 @@
+## ===============================================================
+## Stage 1: Build & Package Spring Boot App
+## ===============================================================
+#FROM eclipse-temurin:17-jdk-alpine AS builder
+#WORKDIR /build
+#
+## --- Copy Maven files first for dependency caching ---
+#COPY pom.xml .
+#COPY .mvn .mvn
+#COPY mvnw .
+#
+#RUN ./mvnw dependency:go-offline -B
+#
+## --- Copy source and build jar ---
+#COPY src src
+#RUN ./mvnw clean package -DskipTests
+#
+## ===============================================================
+## Stage 2: Generate AppCDS Archive
+## ===============================================================
+#FROM eclipse-temurin:17-jdk-alpine AS cdsbuilder
+#WORKDIR /build
+#
+## Copy built jar
+#COPY --from=builder /build/target/*.jar app.jar
+#
+## Extract classlist automatically from the jar and build CDS archive
+#RUN java -Xshare:dump \
+#         -XX:SharedArchiveFile=app-cds.jsa \
+#         -cp app.jar
+#
+## ===============================================================
+## Stage 3: Minimal Distroless Runtime
+## ===============================================================
+#FROM gcr.io/distroless/java17:nonroot
+#WORKDIR /app
+#
+## Copy app jar and CDS archive from previous stage
+#COPY --from=cdsbuilder /build/app.jar app.jar
+#COPY --from=cdsbuilder /build/app-cds.jsa app-cds.jsa
+#
+## Expose application port
+#EXPOSE 8086
+#
+## Use minimal tuned JVM flags
+#ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xms32m", "-Xmx64m", "-XX:MaxMetaspaceSize=128m", "-XX:+UseG1GC", "-Xshare:on", "-XX:SharedArchiveFile=app-cds.jsa", "-jar", "app.jar"]

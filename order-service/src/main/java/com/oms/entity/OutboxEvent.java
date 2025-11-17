@@ -34,6 +34,13 @@ public class OutboxEvent {
     @Builder.Default
     private boolean published = false;
 
+    @Column(name = "retry_count", columnDefinition = "int default 0")
+    private int retryCount = 0;       // new: number of retries
+    @Column(name="last_attempt_at")
+    private Instant lastAttemptAt;    // new: last attempt timestamp
+    @Column(name="next_attempt_at")
+    private Instant nextAttemptAt;    // optional: schedule next attempt
+
     @Builder.Default
     @Column( name = "created_at" )
     private Instant createdAt = Instant.now();

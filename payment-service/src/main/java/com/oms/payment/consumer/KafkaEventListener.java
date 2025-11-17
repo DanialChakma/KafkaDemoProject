@@ -6,6 +6,7 @@ import com.oms.payment.events.PaymentRequestEvent;
 import com.oms.payment.service.PaymentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,8 +17,10 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class KafkaEventListener {
 
+    @Autowired
     private final PaymentService paymentService;
-    private final ObjectMapper mapper = new ObjectMapper();
+    @Autowired
+    private final ObjectMapper mapper;
 
     @KafkaListener(
             topics = "${topics.payments-request:payments.request}",

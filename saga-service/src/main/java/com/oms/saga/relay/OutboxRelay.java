@@ -23,10 +23,11 @@ public class OutboxRelay {
     private final ObjectMapper mapper;
 
     @Transactional
-    @Scheduled(fixedDelay = 3000) // every 3s
+    @Scheduled(fixedDelay = 4500) // every 4.5s
     public void relayPendingEvents() {
 
-        List<OutboxEvent> pendingEvents = outboxRepository.findByPublishedFalse();
+        Instant now = Instant.now();
+        List<OutboxEvent> pendingEvents = outboxRepository.findByPublishedFalseAndNextAttemptAtBefore(now);
 
         if (pendingEvents.isEmpty()) {
             log.debug("No pending outbox events to publish.");
@@ -40,15 +41,14 @@ public class OutboxRelay {
                 kafkaTemplate.send(
                             e.getEventType(),
                             e.getAggregateId(),
-                            mapper.readTree(e.getPayload())
+                            e.getPayload()
                         )
                         .whenComplete((result, ex) -> {
                             if (ex == null) {
-                                e.setPublished(true);
-                                e.setUpdatedAt(Instant.now());
-                                outboxRepository.save(e);
+                                markOutboxAsSent(e.getId());
                                 log.info("Resent outbox event {} -> {}", e.getEventType(), e.getAggregateId());
                             } else {
+                                markOutboxAsFailed(e.getId());
                                 log.warn("Failed resend of {}: {}", e.getEventType(), ex.getMessage());
                             }
                         });
@@ -59,5 +59,27 @@ public class OutboxRelay {
             }
         }
     }
+
+    @Transactional
+    protected void markOutboxAsFailed(Long outboxId) {
+        outboxRepository.findById(outboxId).ifPresent(e -> {
+            e.setRetryCount(e.getRetryCount() + 1);
+            e.setLastAttemptAt(Instant.now());
+            // exponential backoff: e.g., 2^retryCount seconds
+            long delaySeconds = (long) Math.pow(2, e.getRetryCount());
+            e.setNextAttemptAt(Instant.now().plusSeconds(delaySeconds));
+            outboxRepository.save(e);
+        });
+    }
+
+    @Transactional
+    protected void markOutboxAsSent(Long outboxId) {
+        outboxRepository.findById(outboxId).ifPresent(o -> {
+            o.setPublished(true);
+            o.setUpdatedAt(Instant.now());
+            outboxRepository.save(o);
+        });
+    }
+
 }
 

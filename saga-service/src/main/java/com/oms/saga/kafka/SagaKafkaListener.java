@@ -6,6 +6,7 @@ import com.oms.saga.events.*;
 import com.oms.saga.service.SagaOrchestratorService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +18,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor
 public class SagaKafkaListener {
 
+    @Autowired
     private final ObjectMapper mapper;
+    @Autowired
     private final SagaOrchestratorService orchestrator;
 
     private final ConcurrentHashMap<String, Boolean> customerValidated = new ConcurrentHashMap<>();
@@ -29,9 +32,10 @@ public class SagaKafkaListener {
     * purpose: validate if customer exist or not in an order
     * */
     @KafkaListener(topics = "${customer-validation-result:customer.validation.result}",
-            groupId = "${spring.kafka.consumer.group-id:saga-orchestrator}"
+            groupId = "${spring.kafka.consumer.group-id:saga}-customer-validation"
     )
     public void onCustomerValidation(String message) throws Exception {
+        log.info("Customer validation Result Found!");
         CustomerValidationResultEvent e = mapper.readValue(message, CustomerValidationResultEvent.class);
         customerValidated.put(e.getOrderId(), e.isValid());
         checkValidationComplete(e.getOrderId());
@@ -43,9 +47,10 @@ public class SagaKafkaListener {
      * purpose: validate products in an order if all products exist or not in the product catalog
      * */
     @KafkaListener(topics = "${product-validation-result:product.validation.result}",
-            groupId = "${spring.kafka.consumer.group-id:saga-orchestrator}"
+            groupId = "${spring.kafka.consumer.group-id:saga}-product-validation"
     )
     public void onProductValidation(String message) throws Exception {
+        log.info("Product validation Result Found!");
         ProductValidationResultEvent e = mapper.readValue(message, ProductValidationResultEvent.class);
         productValidationResults.put(e.getOrderId(), e);
         checkValidationComplete(e.getOrderId());
@@ -85,7 +90,7 @@ public class SagaKafkaListener {
      * purpose: confirming if inventory successfully reserved an order's items
      * */
     @KafkaListener(topics = "${topics.inventory-reserved:inventory.reserved}",
-            groupId = "${spring.kafka.consumer.group-id:saga-orchestrator}"
+            groupId = "${spring.kafka.consumer.group-id:saga}-inventory-reserved"
     )
     public void onInventoryReserved(String message) throws Exception {
         InventoryReservedEvent e = mapper.readValue(message, InventoryReservedEvent.class);
@@ -98,7 +103,7 @@ public class SagaKafkaListener {
      * purpose: confirming reservation failed while trying to reserve items in an order's
      * */
     @KafkaListener(topics = "${topics.inventory-reservation-failed:inventory.reservation.failed}",
-            groupId = "${spring.kafka.consumer.group-id:saga-orchestrator}"
+            groupId = "${spring.kafka.consumer.group-id:saga}-inventory-reservation-failed"
     )
     public void onInventoryReservationFailed(String message) throws Exception {
         InventoryReservationFailedEvent e = mapper.readValue(message, InventoryReservationFailedEvent.class);
@@ -113,7 +118,7 @@ public class SagaKafkaListener {
      * compensation step in saga
      * */
     @KafkaListener(topics = "${topics.inventory-released:inventory.released}",
-            groupId = "${spring.kafka.consumer.group-id:saga-orchestrator}"
+            groupId = "${spring.kafka.consumer.group-id:saga}-inventory-released"
     )
     public void onInventoryReleased(String message) throws Exception {
         InventoryReleasedEvent e = mapper.readValue(message, InventoryReleasedEvent.class);
@@ -127,11 +132,16 @@ public class SagaKafkaListener {
      * compensation step in saga
      * */
     @KafkaListener(topics = "${topics.payments-success:payment.success}",
-            groupId = "${spring.kafka.consumer.group-id:saga-orchestrator}"
+            groupId = "${spring.kafka.consumer.group-id:saga}-payment-success"
     )
     public void onPaymentSuccess(String message) throws Exception {
-        PaymentSuccessEvent e = mapper.readValue(message, PaymentSuccessEvent.class);
-        orchestrator.handlePaymentSuccess(e);
+        try {
+            log.info("Payment Success Event Arrived!");
+            PaymentSuccessEvent e = mapper.readValue(message, PaymentSuccessEvent.class);
+            orchestrator.handlePaymentSuccess(e);
+        }catch (Exception e){
+            log.error("Exception::Processing Payment Success Event: {}", e.getMessage() );
+        }
     }
 
     /*
@@ -140,9 +150,10 @@ public class SagaKafkaListener {
      * purpose: confirming payment has been failed
      * */
     @KafkaListener(topics = "${topics.payments-failed:payment.failed}",
-            groupId = "${spring.kafka.consumer.group-id:saga-orchestrator}"
+            groupId = "${spring.kafka.consumer.group-id:saga}-payment-failed"
     )
     public void onPaymentFailed(String message) throws Exception {
+        log.info("Payment Failed Event Arrived!");
         PaymentFailedEvent e = mapper.readValue(message, PaymentFailedEvent.class);
         orchestrator.handlePaymentFailed(e);
     }
@@ -154,7 +165,7 @@ public class SagaKafkaListener {
      * compensation step in saga
      * */
     @KafkaListener(topics = "${topics.payments-refunded:payments.refunded}",
-            groupId = "${spring.kafka.consumer.group-id:saga-orchestrator}"
+            groupId = "${spring.kafka.consumer.group-id:saga}-payments-refunded"
     )
     public void onPaymentRefunded(String message) throws Exception {
         PaymentRefundedEvent e = mapper.readValue(message, PaymentRefundedEvent.class);

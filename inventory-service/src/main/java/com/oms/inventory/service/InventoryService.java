@@ -2,13 +2,11 @@ package com.oms.inventory.service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.oms.inventory.dto.InventoryItemDto;
 import com.oms.inventory.entity.Inventory;
 import com.oms.inventory.entity.InventoryReservation;
 import com.oms.inventory.entity.OutboxEvent;
-import com.oms.inventory.events.InventoryReservationResultEvent;
-import com.oms.inventory.events.InventoryReserveRequestEvent;
-import com.oms.inventory.events.ItemStatusDto;
-import com.oms.inventory.events.OrderItemDTO;
+import com.oms.inventory.events.*;
 import com.oms.inventory.repository.InventoryRepository;
 import com.oms.inventory.repository.InventoryReservationRepository;
 import com.oms.inventory.repository.OutboxEventRepository;
@@ -240,20 +238,23 @@ public class InventoryService {
         reservationRepository.deleteAll(reservations);
 
         // 4️⃣ Record outbox event for "inventory.released"
-        String payload = """
-        {
-          "orderId": "%s",
-          "releasedItems": %s
-        }
-        """.formatted(
-                orderId,
-                reservations.stream()
-                        .map(r -> String.format("{\"productId\":%d, \"quantity\":%d}", r.getProductId(), r.getReservedQuantity()))
-                        .collect(Collectors.joining(",", "[", "]"))
-        );
 
-        outboxRepository.save(new OutboxEvent(orderId, "Inventory", "inventory.released", payload));
+       var itemList = reservations.stream().map(i->{
+            InventoryItemDto dto = InventoryItemDto.builder()
+                    .productId(i.getProductId())
+                    .quantity(i.getReservedQuantity())
+                    .build();
+            return dto;
+        }).toList();
 
+        InventoryReleasedEvent event = InventoryReleasedEvent.builder()
+                .orderId(orderId)
+                .eventId(UUID.randomUUID().toString())
+                .reason("RELEASED")
+                .releasedItems(itemList)
+                .build();
+
+        this.publishEvent(event, "inventory.released", orderId, "inventory-service");
         log.info("✅ Released reserved stock for order {}", orderId);
     }
 
@@ -272,7 +273,8 @@ public class InventoryService {
                     .payload(payload)
                     .createdAt(Instant.now())
                     .build();
-            outboxRepository.save(outbox);
+
+            outboxRepository.saveAndFlush(outbox);
 
             // 2️⃣ Attempt to send immediately
             kafkaTemplate.send(eventType, aggregateId, payload)
@@ -282,12 +284,27 @@ public class InventoryService {
                             markOutboxAsSent(outbox.getId());
                         } else {
                             log.error("Kafka send failed for {} [{}]: {}", eventType, aggregateId, ex.getMessage());
+                            markOutboxAsFailed(outbox.getId());
                         }
                     });
 
         } catch (Exception e) {
             log.error("Error publishing event to Kafka/outbox: {}", e.getMessage());
+
         }
+    }
+
+
+    @Transactional
+    protected void markOutboxAsFailed(Long outboxId) {
+        outboxRepository.findById(outboxId).ifPresent(e -> {
+            e.setRetryCount(e.getRetryCount() + 1);
+            e.setLastAttemptAt(Instant.now());
+            // exponential backoff: e.g., 2^retryCount seconds
+            long delaySeconds = (long) Math.pow(2, e.getRetryCount());
+            e.setNextAttemptAt(Instant.now().plusSeconds(delaySeconds));
+            outboxRepository.save(e);
+        });
     }
 
     @Transactional

@@ -1,0 +1,48 @@
+#version: '3.9'
+
+services:
+  mysql:
+    image: mysql:8.0-oraclelinux8
+    container_name: mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: danial
+      MYSQL_PASSWORD: nopass
+    ports:
+      - "3307:3306"
+    mem_limit: 300m
+    volumes:
+      - ./mysql-init/my.cnf:/etc/mysql/conf.d/my.cnf
+      - ./mysql-init:/docker-entrypoint-initdb.d # <-- host folder mounted
+      - D:/docker-data/mysql_data:/var/lib/mysql
+    networks:
+      - app_network
+      - shared-net
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: redpanda
+    command:
+      - redpanda start --overprovisioned --smp 1 --memory 256M --reserve-memory 0M --node-id 0 --check=false
+    ports:
+      - "9092:9092"
+    mem_limit: 400m
+    networks:
+      - app_network
+      - shared-net
+#  kafka-ui:
+#    image: provectuslabs/kafka-ui:latest
+#    ports:
+#      - "9093:8080"
+#    environment:
+#      - KAFKA_CLUSTERS_0_NAME=local
+#      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=redpanda:9092
+#    mem_limit: 200m
+#    networks:
+#      - app_network
+
+networks:
+  app_network:
+    driver: bridge
+  shared-net:
+    name: shared-net  # auto-created if missing

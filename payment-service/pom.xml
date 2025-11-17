@@ -16,6 +16,8 @@
         <java.version>17</java.version>
         <spring.boot.version>3.3.4</spring.boot.version>
         <spring.cloud.version>2023.0.3</spring.cloud.version>
+        <spring-boot.aot.enabled>true</spring-boot.aot.enabled>
+        <spring-boot.appcds.enabled>true</spring-boot.appcds.enabled>
     </properties>
 
     <!-- ✅ Parent -->
@@ -30,9 +32,15 @@
     <dependencies>
 
         <!-- Spring Boot Web -->
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.boot</groupId>-->
+<!--            <artifactId>spring-boot-starter-web</artifactId>-->
+<!--        </dependency>-->
+
+        <!-- Reactive Web Server (Netty) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
 
         <!-- Spring Data JPA -->
@@ -62,16 +70,16 @@
         </dependency>
 
         <!-- ✅ Eureka Client -->
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.cloud</groupId>-->
+<!--            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>-->
+<!--        </dependency>-->
 
         <!-- Actuator (for health checks, metrics) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>org.springframework.boot</groupId>-->
+<!--            <artifactId>spring-boot-starter-actuator</artifactId>-->
+<!--        </dependency>-->
 
         <dependency>
             <groupId>org.springframework.kafka</groupId>
@@ -135,4 +143,28 @@
             </plugin>
         </plugins>
     </build>
+    <profiles>
+        <profile>
+            <id>native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-maven-plugin</artifactId>
+                        <version>${spring.boot.version}</version>
+                        <configuration>
+                            <mainClass>com.oms.payment.PaymentServiceApplication</mainClass>
+                        </configuration>
+                        <executions>
+                            <execution>
+                                <goals>
+                                    <goal>process-aot</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

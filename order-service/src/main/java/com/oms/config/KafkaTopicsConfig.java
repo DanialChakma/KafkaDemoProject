@@ -1,6 +1,5 @@
 package com.oms.config;
 
-
 import org.apache.kafka.clients.admin.NewTopic;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -35,7 +34,7 @@ public class KafkaTopicsConfig {
             topics.values().forEach(topicName -> {
                 newTopics.add(
                         TopicBuilder.name(topicName)
-                                .partitions(3)
+                                .partitions(1)
                                 .replicas(1)
                                 .build()
                 );

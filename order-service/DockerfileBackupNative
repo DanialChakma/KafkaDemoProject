@@ -1,0 +1,42 @@
+## ---------- Stage 1: Build Native Image with Caching ----------
+#FROM ghcr.io/graalvm/native-image-community:17 AS builder
+##FROM ghcr.io/graalvm/native-image-community:17-musl AS builder
+#WORKDIR /workspace
+#
+### Install native-image tool
+##RUN gu install native-image
+#
+## 1️⃣ Copy Maven wrapper and config first (for dependency caching)
+#COPY mvnw .
+#COPY .mvn .mvn
+#COPY pom.xml .
+#
+## 2️⃣ Ensure mvnw is executable
+#RUN chmod +x mvnw
+#
+## Pre-download dependencies (cached unless pom.xml changes)
+#RUN ./mvnw dependency:go-offline -B
+#
+## Now copy the source code
+#COPY src src
+#
+## Build native image
+#RUN ./mvnw spring-boot:build-image -Pnative
+#
+##RUN ./mvnw -Pnative -DskipTests -Dspring.aot.skip=false -Dmaven.test.skip=true -DskipNativeImage=true clean package
+#
+## ---------- Stage 2: Minimal Runtime Image ----------
+## Use a minimal OS (distroless or alpine)
+#FROM gcr.io/distroless/base
+#
+#WORKDIR /app
+#
+## Copy only the final binary
+## (Spring Boot native plugin outputs binary named after your artifactId)
+#COPY --from=builder /workspace/target/*-service /app/order-service
+#
+## Expose your app port
+#EXPOSE 8086
+#
+## Run binary directly (no JVM)
+#ENTRYPOINT ["/app/order-service"]

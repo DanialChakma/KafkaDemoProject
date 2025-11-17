@@ -50,6 +50,13 @@ public class OrderService {
             order.setStatus(OrderStatus.PENDING);
             order.setOrderNumber(ORDGenerator.genOrdNumber());
 
+            // Set parent in each child item
+            for (OrderItem item : order.getItems()) {
+                item.setOrder(order); // 🔹 Important: establishes bidirectional relationship
+                // calculate subtotal per item
+                item.setSubtotal(item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())));
+            }
+
             BigDecimal totalAmount = order.getItems().stream()
                     .map(item -> item.getUnitPrice().multiply(BigDecimal.valueOf(item.getQuantity())))
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -214,12 +221,25 @@ public class OrderService {
                             markOutboxAsSent(outbox.getId());
                         } else {
                             log.error("Kafka send failed for {} [{}]: {}", eventType, aggregateId, ex.getMessage());
+                            markOutboxAsFailed(outbox.getId());
                         }
                     });
 
         } catch (Exception e) {
             log.error("Error publishing event to Kafka/outbox: {}", e.getMessage());
         }
+    }
+
+    @Transactional
+    protected void markOutboxAsFailed(Long outboxId) {
+        outboxRepository.findById(outboxId).ifPresent(e -> {
+            e.setRetryCount(e.getRetryCount() + 1);
+            e.setLastAttemptAt(Instant.now());
+            // exponential backoff: e.g., 2^retryCount seconds
+            long delaySeconds = (long) Math.pow(2, e.getRetryCount());
+            e.setNextAttemptAt(Instant.now().plusSeconds(delaySeconds));
+            outboxRepository.save(e);
+        });
     }
 
     @Transactional

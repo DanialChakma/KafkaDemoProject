@@ -8,32 +8,85 @@ spring:
     discovery:
       enabled: true
   datasource:
-    url: jdbc:mysql://host.docker.internal:3306/inventory_db?allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC
-    username: danial
-    password: nopass
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3306/inventory_db?allowPublicKeyRetrieval=true&createDatabaseIfNotExist=true&useSSL=false&serverTimezone=UTC}
+    username: ${SPRING_DATASOURCE_USERNAME:danial}
+    password: ${SPRING_DATASOURCE_PASSWORD:nopass}
     driver-class-name: com.mysql.cj.jdbc.Driver
-
+    hikari:
+      maximum-pool-size: 5          # ↓ default 10
+      minimum-idle: 2
+      pool-name: HikariPool
+      max-lifetime: 1800000
+      idle-timeout: 300000
+      connection-timeout: 30000
   jpa:
     hibernate:
       ddl-auto: update
     show-sql: false
+    properties:
+      hibernate.cache.use_second_level_cache: false
+      hibernate.cache.use_query_cache: false
+      hibernate.jdbc.fetch_size: 20
+      hibernate.jdbc.batch_size: 10
+      hibernate.generate_statistics: false
   kafka:
-    bootstrap-servers: host.docker.internal:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    listener:
+      concurrency: 1
+      ack-mode: manual_immediate
     consumer:
       group-id: inventory-service
       auto-offset-reset: earliest
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      enable-auto-commit: false
+      max-poll-records: 1
+      key-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        fetch.min.bytes: 1
+        fetch.max.bytes: 262144              # 256 KB
+        max.partition.fetch.bytes: 262144
+        receive.buffer.bytes: 32768          # 32 KB
+        send.buffer.bytes: 32768             # 32 KB
+        max.poll.interval.ms: 300000   # 5m
+        heartbeat.interval.ms: 10000  # 10s
+        session.timeout.ms: 30000     # 30s
+        spring.json.trusted.packages: "*"
+        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        buffer.memory: 16777216          # 16 MB instead of 100 MB
+        spring.json.trusted.packages: "*"
+#        spring.deserializer.key.delegate.class: org.apache.kafka.common.serialization.StringDeserializer
+#        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
 
-eureka:
-  client:
-    service-url:
-      defaultZone: http://localhost:8761/eureka/
-    register-with-eureka: true
-    fetch-registry: true
+  # Reduce number of Spring task threads
+  task:
+    execution:
+      pool:
+        core-size: 1
+        max-size: 2
+        queue-capacity: 50
+    scheduling:
+      pool:
+        size: 1
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration
+      - org.springframework.boot.autoconfigure.security.oauth2.OAuth2AutoConfiguration
+      - org.springframework.boot.autoconfigure.web.servlet.MultipartAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.websocket.servlet.WebSocketServletAutoConfiguration
+      - org.springframework.boot.autoconfigure.jmx.JmxAutoConfiguration
+      - org.springframework.boot.autoconfigure.web.servlet.error.ErrorMvcAutoConfiguration
+#eureka:
+#  client:
+#    service-url:
+#      defaultZone: http://localhost:8761/eureka/
+#    register-with-eureka: true
+#    fetch-registry: true
 
 # topics mapping
 topics:
@@ -48,3 +101,22 @@ topics:
 
 
 
+
+# Reduce Netty worker threads (default: CPU * 2)
+# Reduce Netty buffer allocator (optional)
+reactor:
+  netty:
+    maxConnections: 3
+    ioWorkerCount: 1
+    # optional if heavy load:
+    # ioSelectCount: 1
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+    enabled-by-default: false
+  metrics:
+    enable:
+      all: false

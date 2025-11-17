@@ -1,5 +1,6 @@
 package com.oms.entity;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.GenericGenerator;
@@ -51,6 +52,7 @@ public class Order {
     private Long version;
 
     @OneToMany(mappedBy = "order", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference  // ✅ tells Jackson to serialize this side
     private List<OrderItem> items = new ArrayList<>();
 
     @Column(name = "reason")

@@ -10,6 +10,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.List;
 
 @Slf4j
@@ -22,18 +23,27 @@ public class OutboxRelay {
     private final ObjectMapper mapper;
 
     @Transactional
-    @Scheduled(fixedDelay = 3000)
+    @Scheduled(fixedDelay = 3500) // 3.5s
     public void relayPendingEvents() {
-
-        List<OutboxEvent> pendingEvents = outboxRepository.findByPublishedFalse();
+        Instant now = Instant.now();
+        List<OutboxEvent> pendingEvents = outboxRepository.findByPublishedFalseAndNextAttemptAtBefore(now);
 
         for (OutboxEvent e : pendingEvents) {
             try {
-                kafkaTemplate.send(e.getEventType(),
+                kafkaTemplate.send(
+                        e.getEventType(),
                         e.getAggregateId(),
-                        mapper.readTree(e.getPayload()));
-                e.setPublished(true);
-                outboxRepository.save(e);
+                        e.getPayload()
+                ).whenComplete((result, ex) -> {
+                    if (ex == null) {
+                        log.info("Resent outbox event {} -> {}", e.getEventType(), e.getAggregateId());
+                        markOutboxAsSent(e.getId());
+                    } else {
+                        log.warn("Failed resend of {}: {}", e.getEventType(), ex.getMessage());
+                        markOutboxAsFailed(e.getId());
+                    }
+                });
+
                 log.info("✅ Relayed Outbox event: {} for aggregate {}", e.getEventType(), e.getAggregateId());
             } catch (Exception ex) {
                 log.error("💥 Failed to publish outbox event {}: {}", e.getId(), ex.getMessage());
@@ -42,5 +52,27 @@ public class OutboxRelay {
             }
         }
     }
+
+    @Transactional
+    protected void markOutboxAsFailed(Long outboxId) {
+        outboxRepository.findById(outboxId).ifPresent(e -> {
+            e.setRetryCount(e.getRetryCount() + 1);
+            e.setLastAttemptAt(Instant.now());
+            // exponential backoff: e.g., 2^retryCount seconds
+            long delaySeconds = (long) Math.pow(2, e.getRetryCount());
+            e.setNextAttemptAt(Instant.now().plusSeconds(delaySeconds));
+            outboxRepository.save(e);
+        });
+    }
+
+    @Transactional
+    protected void markOutboxAsSent(Long outboxId) {
+        outboxRepository.findById(outboxId).ifPresent(o -> {
+            o.setPublished(true);
+            o.setUpdatedAt(Instant.now());
+            outboxRepository.save(o);
+        });
+    }
+
 }
 

@@ -153,7 +153,7 @@ public class PaymentService {
                     .payload(payload)
                     .createdAt(Instant.now())
                     .build();
-            outboxRepository.save(outbox);
+            outboxRepository.saveAndFlush(outbox);
 
             // 2️⃣ Attempt to send immediately
             kafkaTemplate.send(eventType, aggregateId, payload)
@@ -163,12 +163,25 @@ public class PaymentService {
                             markOutboxAsSent(outbox.getId());
                         } else {
                             log.error("Kafka send failed for {} [{}]: {}", eventType, aggregateId, ex.getMessage());
+                            markOutboxAsFailed(outbox.getId());
                         }
                     });
 
         } catch (Exception e) {
             log.error("Error publishing event to Kafka/outbox: {}", e.getMessage());
         }
+    }
+
+    @Transactional
+    protected void markOutboxAsFailed(Long outboxId) {
+        outboxRepository.findById(outboxId).ifPresent(e -> {
+            e.setRetryCount(e.getRetryCount() + 1);
+            e.setLastAttemptAt(Instant.now());
+            // exponential backoff: e.g., 2^retryCount seconds
+            long delaySeconds = (long) Math.pow(2, e.getRetryCount());
+            e.setNextAttemptAt(Instant.now().plusSeconds(delaySeconds));
+            outboxRepository.save(e);
+        });
     }
 
     @Transactional

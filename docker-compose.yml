@@ -1,37 +1,51 @@
-version: '2'
+#version: '3.9'
+
 services:
-  zookeeper:
-    image: wurstmeister/zookeeper
+  mariadb:
+    image: yobasystems/alpine-mariadb:10.11
+    container_name: mariadb
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: danial
+      MYSQL_PASSWORD: nopass
     ports:
-      - "2181:2181"
+      - "3307:3306"
+    volumes:
+      - ./mysql-init/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - ./mysql-init/maria-db.cnf:/etc/mysql/conf.d/my.cnf # optional
+      - D:/docker-data/mysql_data:/var/lib/mysql
+    mem_limit: 60m
     networks:
-      - kafka-net
-  kafka:
-    image: wurstmeister/kafka
-    hostname: kafka
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - shared-net
+      - app_network
+
+  redpanda:
+    image: redpandadata/redpanda:latest
+    container_name: redpanda
+    command:
+      - redpanda start --overprovisioned --smp 1 --memory 128M --reserve-memory 0M --node-id 0 --check=false --set redpanda.auto_create_topics_enabled=true  --kafka-addr PLAINTEXT://0.0.0.0:9092 --advertise-kafka-addr PLAINTEXT://redpanda:9092
     ports:
       - "9092:9092"
+    mem_limit: 160m
     networks:
-      - kafka-net
-    volumes:
-      - D:/docker-data/kafka-data:/kafka/kafka-logs  # Adjust path
-    environment:
-      #KAFKA_ADVERTISED_HOST_NAME: 127.0.0.1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_CREATE_TOPICS: "test_topic:1:1"
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092 #,PLAINTEXT_INTERNAL://0.0.0.0:29092   #Where Kafka binds inside the container
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://host.docker.internal:9092 #,PLAINTEXT_INTERNAL://kafka:29092  #The address clients will use to connect
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      - app_network
+      - shared-net
+  # -----------------
+  # Kafka UI for Monitoring
+  # -----------------
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     ports:
       - "9093:8080"
     environment:
       - KAFKA_CLUSTERS_0_NAME=local
-      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=redpanda:9092
     networks:
-      - kafka-net
+      - app_network
+      - shared-net
+
 networks:
-  kafka-net:
+  shared-net:
+    name: shared-net  # auto-created if missing
+  app_network:
+    driver: bridge

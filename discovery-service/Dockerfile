@@ -13,4 +13,5 @@ COPY target/*.jar app.jar
 EXPOSE 8761
 
 # Step 5: Run the jar
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Max Heap Size: 256MB, Min Heap Size: 128MB
+ENTRYPOINT ["java", "-Xmx256m", "-Xms128m", "-jar", "app.jar"]
